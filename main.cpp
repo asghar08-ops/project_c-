@@ -1,36 +1,44 @@
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <vector>
 using namespace std;
 
-class ATM {
-private:
+struct User {
+    string name;
     int pin;
     double balance;
+};
+
+class ATM {
+private:
+    User currentUser;
     vector<string> transactions;
 
-public:
-    ATM() {
-        loadAccount();
-        loadTransactions();
-    }
-
-    void loadAccount() {
-        ifstream file("account.txt");
-        if (file.is_open()) {
-            file >> pin >> balance;
-            file.close();
-        } else {
-            pin = 1234;
-            balance = 10000;
-            saveAccount();
+    void saveUsers(const vector<User>& users) {
+        ofstream file("users.txt");
+        for (const auto& u : users) {
+            file << u.name << " " << u.pin << " " << u.balance << endl;
         }
     }
 
-    void saveAccount() {
-        ofstream file("account.txt");
-        file << pin << " " << balance;
+    vector<User> loadUsers() {
+        vector<User> users;
+        ifstream file("users.txt");
+        string name;
+        int pin;
+        double balance;
+        while (file >> name >> pin >> balance) {
+            users.push_back({name, pin, balance});
+        }
+        return users;
+    }
+
+    void saveTransaction(string msg) {
+        ofstream file("transactions.txt", ios::app);
+        file << currentUser.name << ": " << msg << endl;
         file.close();
+        transactions.push_back(msg);
     }
 
     void loadTransactions() {
@@ -39,25 +47,59 @@ public:
         while (getline(file, line)) {
             transactions.push_back(line);
         }
-        file.close();
     }
 
-    void saveTransaction(string msg) {
-        ofstream file("transactions.txt", ios::app);
-        file << msg << endl;
-        file.close();
-        transactions.push_back(msg);
+public:
+    void registerUser() {
+        vector<User> users = loadUsers();
+        cout << "\n--- Registration ---\n";
+        cout << "Enter your name: ";
+        cin >> currentUser.name;
+        cout << "Set 4-digit PIN: ";
+        cin >> currentUser.pin;
+        cout << "Initial deposit: ";
+        cin >> currentUser.balance;
+        users.push_back(currentUser);
+        saveUsers(users);
+        cout << "Registration successful!\n";
+        saveTransaction("Account created with balance Rs. " + to_string(currentUser.balance));
     }
 
-    bool authenticate() {
-        int inputPin;
-        cout << "\nEnter PIN: ";
-        cin >> inputPin;
-        return inputPin == pin;
+    bool login() {
+        vector<User> users = loadUsers();
+        string name;
+        int pin;
+        cout << "\n--- Login ---\n";
+        cout << "Enter name: ";
+        cin >> name;
+        cout << "Enter PIN: ";
+        cin >> pin;
+
+        for (auto &u : users) {
+            if (u.name == name && u.pin == pin) {
+                currentUser = u;
+                loadTransactions();
+                cout << "Login successful! Welcome " << currentUser.name << endl;
+                return true;
+            }
+        }
+        cout << "Incorrect credentials!\n";
+        return false;
+    }
+
+    void updateBalance() {
+        vector<User> users = loadUsers();
+        for (auto &u : users) {
+            if (u.name == currentUser.name) {
+                u.balance = currentUser.balance;
+                break;
+            }
+        }
+        saveUsers(users);
     }
 
     void checkBalance() {
-        cout << "\nCurrent Balance: Rs. " << balance << endl;
+        cout << "\nCurrent Balance: Rs. " << currentUser.balance << endl;
     }
 
     void deposit() {
@@ -65,8 +107,8 @@ public:
         cout << "\nEnter amount to deposit: ";
         cin >> amount;
         if (amount > 0) {
-            balance += amount;
-            saveAccount();
+            currentUser.balance += amount;
+            updateBalance();
             saveTransaction("Deposited: Rs. " + to_string(amount));
             cout << "Deposit successful!\n";
         } else {
@@ -78,9 +120,9 @@ public:
         double amount;
         cout << "\nEnter amount to withdraw: ";
         cin >> amount;
-        if (amount > 0 && amount <= balance) {
-            balance -= amount;
-            saveAccount();
+        if (amount > 0 && amount <= currentUser.balance) {
+            currentUser.balance -= amount;
+            updateBalance();
             saveTransaction("Withdrawn: Rs. " + to_string(amount));
             cout << "Please collect your cash.\n";
         } else {
@@ -121,13 +163,21 @@ public:
 
 int main() {
     ATM atm;
+    int option;
 
     cout << "==== Welcome to ATM Simulation ====\n";
+    cout << "1. Register\n2. Login\nChoose option: ";
+    cin >> option;
 
-    if (atm.authenticate()) {
+    if (option == 1) {
+        atm.registerUser();
         atm.menu();
+    } else if (option == 2) {
+        if (atm.login()) {
+            atm.menu();
+        }
     } else {
-        cout << "Incorrect PIN! Access denied.\n";
+        cout << "Invalid option!\n";
     }
 
     return 0;
